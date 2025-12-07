@@ -34,6 +34,17 @@
 		.message.lose{background:linear-gradient(135deg,#fdf1f2,#ffeef0);color:#5a0b1a;border:3px solid #ffb6c8}
 		@keyframes pop{from{transform:translate(-50%, -8%) scale(.94);opacity:0}to{transform:translate(-50%,0) scale(1);opacity:1}}
 
+		/* Win Modal */
+		.modal-overlay{position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:2000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+		.modal-overlay.show{display:flex;animation:fadeIn .4s ease}
+		.modal-content{background:linear-gradient(135deg,#fffbea,#e8ffda);padding:32px;border-radius:20px;text-align:center;max-width:400px;width:90%;position:relative;z-index:2002;box-shadow:0 20px 60px rgba(0,0,0,0.5);border:4px solid #42d96a;animation:popIn .5s cubic-bezier(0.175, 0.885, 0.32, 1.275)}
+		.modal-content h2{margin:0 0 16px;color:#08430a;font-size:28px}
+		.modal-content p{color:#135215;margin:0 0 24px;font-size:16px;line-height:1.5}
+		.modal-actions{display:flex;gap:16px;justify-content:center;margin-top:24px}
+		.fireworks-canvas{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:2001}
+		@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+		@keyframes popIn{from{transform:scale(0.8);opacity:0}to{transform:scale(1);opacity:1}}
+
 		.explain{margin-top:18px;background:rgba(255,255,255,0.03);padding:12px;border-radius:10px;color:#dff8df;font-size:14px}
 		code{background:rgba(255,255,255,0.03);padding:2px 6px;border-radius:4px;color:#d6ffd7}
 
@@ -269,6 +280,20 @@
 
 		<div id="msg" class="message"></div>
 
+		<!-- Win Modal -->
+		<div id="winModal" class="modal-overlay">
+			<canvas id="fireworksCanvas" class="fireworks-canvas"></canvas>
+			<div class="modal-content">
+				<h2>Congratulations!</h2>
+				<p>You win!</p>
+				<p>It offers you two choices with two buttons.</p>
+				<div class="modal-actions">
+					<button id="modalNewTicketBtn" class="btn">New Ticket</button>
+					<button id="modalRedirectBtn" class="btn">Claim Prize</button>
+				</div>
+			</div>
+		</div>
+
 		<script>
 		// Main JS for scratch-off CAPTCHA
 		(function(){
@@ -277,6 +302,7 @@
 			const CLEAR_THRESHOLD = 0.80; // 80% cleared (when evaluation runs)
 			const sampleInterval = 4000; // ms
 			const ALERT_DURATION = 10000; // ms duration for win/loss alert
+			const REDIRECT_URL = 'https://www.youtube.com/watch?v=IPFiKEm-oNI'; // Constant for redirect
 			// Messages you can customize
 			let WIN_MESSAGE = 'You win!';
 			let WIN_SUBTEXT = 'Great now I know you\'re not a Robot!';
@@ -304,6 +330,13 @@
 			const msgEl = document.getElementById('msg');
 			const resetBtn = document.getElementById('resetBtn');
 			const revealBtn = document.getElementById('revealBtn');
+			const winModal = document.getElementById('winModal');
+			const modalNewTicketBtn = document.getElementById('modalNewTicketBtn');
+			const modalRedirectBtn = document.getElementById('modalRedirectBtn');
+			const fwCanvas = document.getElementById('fireworksCanvas');
+			let fwCtx = fwCanvas.getContext('2d');
+			let fwTimer = null;
+			let particles = [];
 
 			let wins = [];
 			let cells = [];
@@ -587,8 +620,8 @@
 				if(!isWin && MATCHES_TO_WIN > 1 && matchesCount >= 1){
 					sub = `You were extremely close, you only found ${matchesCount} numbers out of the total, try again, maybe the next ticket will be luckier!<br>Remember that every great player stops just before the next big win!`;
 				}
-				if(isWin) showMessage(WIN_MESSAGE, true);
-					else showMessage(LOSS_MESSAGE, false, sub);
+				if(isWin) showWinModal();
+				else showMessage(LOSS_MESSAGE, false, sub);
 				// highlight only winning revealed cells visually in the SVG
 				markMatches(revealedIndices);
 			}
@@ -617,10 +650,80 @@
 			}
 
 			function showMessage(text, ok, customSub){
+				if(ok) return; // Win handled by modal now
 				msgEl.className = 'message show ' + (ok? 'win':'lose');
 				const sub = customSub || (ok ? WIN_SUBTEXT : LOSS_SUBTEXT);
 				msgEl.innerHTML = '<strong style="font-size:18px">'+ text +'</strong><div style="margin-top:8px;opacity:.9;font-size:13px">'+ sub +'</div>';
 				setTimeout(()=>{ msgEl.classList.remove('show') }, ALERT_DURATION);
+			}
+
+			function showWinModal(){
+				winModal.classList.add('show');
+				startFireworks();
+			}
+
+			function hideWinModal(){
+				winModal.classList.remove('show');
+				stopFireworks();
+			}
+
+			function startFireworks(){
+				fwCanvas.width = window.innerWidth;
+				fwCanvas.height = window.innerHeight;
+				particles = [];
+				if(fwTimer) cancelAnimationFrame(fwTimer);
+				loopFireworks();
+			}
+
+			function stopFireworks(){
+				if(fwTimer) cancelAnimationFrame(fwTimer);
+				fwCtx.clearRect(0,0,fwCanvas.width, fwCanvas.height);
+			}
+
+			function loopFireworks(){
+				fwCtx.globalCompositeOperation = 'destination-out';
+				fwCtx.fillStyle = 'rgba(0,0,0,0.1)';
+				fwCtx.fillRect(0,0,fwCanvas.width, fwCanvas.height);
+				fwCtx.globalCompositeOperation = 'lighter';
+				
+				if(Math.random()<0.05){
+					createFirework();
+				}
+
+				for(let i=particles.length-1; i>=0; i--){
+					const p = particles[i];
+					p.x += p.vx;
+					p.y += p.vy;
+					p.vy += 0.05; // gravity
+					p.life *= 0.96;
+					fwCtx.fillStyle = p.color;
+					fwCtx.beginPath();
+					fwCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+					fwCtx.fill();
+					if(p.life < 0.05) particles.splice(i,1);
+				}
+				fwTimer = requestAnimationFrame(loopFireworks);
+			}
+
+			function createFirework(){
+				const x = Math.random() * fwCanvas.width;
+				const y = fwCanvas.height;
+				const targetY = Math.random() * (fwCanvas.height * 0.6);
+				const color = `hsl(${Math.random()*360}, 100%, 50%)`;
+				// explosion at random spot
+				const count = 40;
+				for(let i=0;i<count;i++){
+					const angle = (Math.PI*2/count)*i;
+					const speed = Math.random()*3 + 2;
+					particles.push({
+						x: x, y: targetY, // simplify: spawn at top of arc
+						vx: Math.cos(angle)*speed,
+						vy: Math.sin(angle)*speed,
+						color: color,
+						life: 1,
+						size: Math.random()*2+1
+					});
+				}
 			}
 
 			function updateFooterRules(){
@@ -642,6 +745,7 @@
 
 			function reset(){
 				msgEl.classList.remove('show');
+				hideWinModal();
 				solved = false;
 				percentCleared = 0;
 				percentEl.textContent = '0%';
@@ -687,7 +791,8 @@
 				if(!isWin && MATCHES_TO_WIN > 1 && ticketMatches >= 1){
 					sub = `You were extremely close, you only found ${ticketMatches} numbers out of the total, try again, maybe the next ticket will be luckier!<br>Remember that every great player stops just before the next big win!`;
 				}
-				showMessage(isWin ? WIN_MESSAGE : LOSS_MESSAGE, isWin, sub);
+				if(isWin) showWinModal();
+				else showMessage(LOSS_MESSAGE, false, sub);
 				solved = true;
 			}
 
@@ -697,6 +802,8 @@
 			window.addEventListener('pointerup', pointerUp);
 			resetBtn.addEventListener('click', ()=>{ reset(); });
 			revealBtn.addEventListener('click', ()=>{ revealWins(); });
+			modalNewTicketBtn.addEventListener('click', ()=>{ reset(); });
+			modalRedirectBtn.addEventListener('click', ()=>{ window.location.href = REDIRECT_URL; });
 
 			// on resize recalc positions and re-draw overlay
 			let rTimer = null;
