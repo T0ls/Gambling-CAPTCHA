@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<title>Scratch-off CAPTCHA Demo</title>
+		<style>
+		:root{ --bg:#05321a; --panel-dark:#0e3a19; --accent:#ffe978; }
+		html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#eafdef;background-color:#000}
+		.wrap{max-width:920px;margin:24px auto;padding:18px}
+		h1{margin:0 0 12px;font-size:20px}
+		p.lead{margin:6px 0 18px;color:#cff7cf}
+
+		.ticket-frame{position:relative;display:block;max-width:100%;height:auto}
+		/* SVG will be responsive; canvas positioned absolute on top of SVG panel */
+
+		#scratchCanvas{position:absolute;left:0;top:0;touch-action:none;cursor:crosshair;border-radius:12px}
+
+		.controls{margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:center}
+		/* Button improvements: gradients, subtle shadow, icons, and focus styles */
+		.btn{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(180deg,#ffffff 0%,#f0f7f0 100%);color:#042;border-radius:12px;padding:10px 14px;font-weight:800;border:none;cursor:pointer;box-shadow:0 6px 18px rgba(2,10,4,0.28);transition:transform .12s ease,box-shadow .12s ease,opacity .12s ease}
+		.btn svg{width:18px;height:18px;flex:0 0 18px;filter:drop-shadow(0 1px 0 rgba(255,255,255,0.15))}
+		.btn:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(2,10,4,0.36)}
+		.btn:active{transform:translateY(0)}
+		.btn:focus{outline:3px solid rgba(255,233,120,0.25);outline-offset:3px}
+		.btn.secondary{background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.12);color:#eaffea;padding:8px 12px}
+
+		/* Percent pill */
+		.percent-pill{background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:999px;font-weight:700;color:#eaffea;border:1px solid rgba(255,255,255,0.04);box-shadow:inset 0 -2px 0 rgba(0,0,0,0.06)}
+
+		.message{position:fixed;left:50%;top:14%;transform:translateX(-50%);padding:18px 24px;border-radius:12px;z-index:999;display:none;box-shadow:0 8px 40px rgba(2,10,4,0.6)}
+		.message.show{display:block;animation:pop .45s ease}
+		.message.win{background:linear-gradient(135deg,#fffbea,#e8ffda);color:#08430a;border:3px solid #42d96a}
+		.message.lose{background:linear-gradient(135deg,#fdf1f2,#ffeef0);color:#5a0b1a;border:3px solid #ffb6c8}
+		@keyframes pop{from{transform:translate(-50%, -8%) scale(.94);opacity:0}to{transform:translate(-50%,0) scale(1);opacity:1}}
+
+		.explain{margin-top:18px;background:rgba(255,255,255,0.03);padding:12px;border-radius:10px;color:#dff8df;font-size:14px}
+		code{background:rgba(255,255,255,0.03);padding:2px 6px;border-radius:4px;color:#d6ffd7}
+
+		/* small responsive tweaks */
+		@media (max-width:700px){ h1{font-size:18px} .controls{justify-content:center} }
+		</style>
+	</head>
+	<body>
+		<div class="wrap">
+			<div id="ticketContainer" class="ticket-frame">
+				<!-- Inline SVG ticket. IDs added so JS can populate texts and position canvas over the "Your Numbers" panel. -->
+				<!-- Note: the SVG below is identical to your template with these small additions: ids on win and cell texts, id on your numbers panel rect and grid group. -->
+
+				<svg id="ticketSvg" width="750" height="520" viewBox="0 0 750 520" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;display:block;margin:0 auto;">
+					<defs>
+						<linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+							<stop offset="0%" stop-color="#0b9f38"/>
+							<stop offset="55%" stop-color="#1bb950"/>
+							<stop offset="100%" stop-color="#078530"/>
+						</linearGradient>
+
+						<linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+							<stop offset="0%" stop-color="#fafafa"/>
+							<stop offset="40%" stop-color="#cfd6df"/>
+							<stop offset="60%" stop-color="#ffffff"/>
+							<stop offset="100%" stop-color="#b4c0cc"/>
+						</linearGradient>
+
+						<radialGradient id="burstGrad" cx="40%" cy="40%" r="70%">
+							<stop offset="0%" stop-color="#ffe978"/>
+							<stop offset="40%" stop-color="#f7d340"/>
+							<stop offset="50%" stop-color="#c5a11d"/>
+						</radialGradient>
+
+						<linearGradient id="panelGrad" x1="0" y1="0" x2="1" y2="1">
+							<stop offset="0%" stop-color="#0e3a19"/>
+							<stop offset="100%" stop-color="#187733"/>
+						</linearGradient>
+
+						<filter id="paper" x="-20%" y="-20%" width="140%" height="140%">
+							<feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="7" result="n" />
+							<feColorMatrix in="n" type="saturate" values="0"/>
+							<feComponentTransfer>
+								<feFuncA type="table" tableValues="0 0 0.02 0"/>
+							</feComponentTransfer>
+							<feBlend in="SourceGraphic" mode="multiply"/>
+						</filter>
+
+						<filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+							<feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000" flood-opacity="0.35"/>
+						</filter>
+
+						<filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+							<feGaussianBlur stdDeviation="3" result="b"/>
+							<feMerge>
+								<feMergeNode in="b"/>
+								<feMergeNode in="SourceGraphic"/>
+							</feMerge>
+						</filter>
+
+						<pattern id="starsPattern" width="40" height="40" patternUnits="userSpaceOnUse">
+							<circle cx="6" cy="6" r="3" fill="#ffffff" opacity="0.18"/>
+							<circle cx="30" cy="18" r="2.5" fill="#ffffff" opacity="0.12"/>
+							<circle cx="18" cy="32" r="2" fill="#ffffff" opacity="0.14"/>
+							<polygon points="20,4 22,9 27,10 23,13 24,18 20,15 16,18 17,13 13,10 18,9" fill="#fff" opacity="0.2"/>
+						</pattern>
+
+						<pattern id="diagonalStripes" patternUnits="userSpaceOnUse" width="16" height="16" patternTransform="skewX(-12)">
+							<rect width="16" height="16" fill="transparent"/>
+							<rect x="0" y="0" width="8" height="16" fill="#ffffff" opacity="0.04"/>
+						</pattern>
+
+						<linearGradient id="shineGrad" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0%" stop-color="white" stop-opacity="0"/>
+							<stop offset="50%" stop-color="white" stop-opacity="0.7"/>
+							<stop offset="100%" stop-color="white" stop-opacity="0"/>
+						</linearGradient>
+						<mask id="shineMask">
+							<rect id="shineRect" x="-500" y="0" width="400" height="340" fill="url(#shineGrad)">
+								<animate attributeName="x" from="-500" to="800" dur="4.8s" repeatCount="indefinite"/>
+							</rect>
+						</mask>
+
+						<style>
+						text { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+						.ticket-title { font-weight: 900; font-size: 45px; letter-spacing: 1px; fill: url(#metal); stroke:#123; stroke-width:3; paint-order: stroke; }
+						.sub { font-weight: 700; font-size: 16px; fill: #e5ffef; letter-spacing: 2px; }
+						.winning-label, .your-label { font-weight:800; font-size:18px; fill:#ffe978; letter-spacing:3px; }
+						.win-chip-num { font-weight:800; font-size:28px; fill:#132a11; }
+						.cell-num { font-weight:900; font-size:34px; fill:#132a11; }
+						.match { fill:#dbffdc; stroke:#42d96a; stroke-width:4; }
+						.nomatch { fill:#f0f7f1; stroke:#c6d9c9; stroke-width:3; }
+						.footer { font-size:13px; fill:#d0f7d6; }
+						.sparkle { fill:#fff; opacity:0.9; }
+						</style>
+					</defs>
+
+					<!-- Card base -->
+					<rect width="750" height="520" rx="22" fill="url(#bgGrad)"/>
+					<rect x="5" y="5" width="740" height="510" rx="18" fill="none" stroke="url(#metal)" stroke-width="8"/>
+					<rect x="10" y="10" width="880" height="500" rx="16" fill="url(#starsPattern)" opacity="0.25" filter="url(#paper)"/>
+
+					<!-- Title -->
+					<text x="370" y="60" text-anchor="middle" class="ticket-title" filter="url(#softShadow)">LUCKY CAPTCHA</text>
+					<text x="370" y="85" text-anchor="middle" class="sub">MATCH AND WIN</text>
+
+					<!-- Sparkles -->
+					<g transform="translate(-60,0)" class="sparkle" filter="url(#glow)">
+						<polygon transform="translate(160,0)" points="130,70 136,86 152,92 136,98 130,114 124,98 108,92 124,86" />
+						<polygon transform="translate(-170,-10)" points="750,88 756,100 770,104 756,108 750,120 744,108 730,104 744,100" />
+					</g>
+
+					<!-- Winning numbers -->
+					<g transform="translate(150,160)">
+						<text x="230" y="-50" text-anchor="middle" class="winning-label">WINNING NUMBERS</text>
+						<g transform="translate(50,0)">
+							<g transform="translate(0,0)">
+								<polygon points="0,-46 11,-15 43,-15 18,5 28,38 0,19 -28,38 -18,5 -43,-15 -11,-15"
+									fill="#ffe978" stroke="#c19e19" stroke-width="3" filter="url(#softShadow)"/>
+								<text id="win-0" class="win-chip-num" x="0" y="10" text-anchor="middle">11</text>
+							</g>
+							<g transform="translate(170,0)">
+								<polygon points="0,-46 11,-15 43,-15 18,5 28,38 0,19 -28,38 -18,5 -43,-15 -11,-15"
+									fill="#ffe978" stroke="#c19e19" stroke-width="3" filter="url(#softShadow)"/>
+								<text id="win-1" class="win-chip-num" x="0" y="10" text-anchor="middle">37</text>
+							</g>
+							<g transform="translate(350,0)">
+								<polygon points="0,-46 11,-15 43,-15 18,5 28,38 0,19 -28,38 -18,5 -43,-15 -11,-15"
+									fill="#ffe978" stroke="#c19e19" stroke-width="3" filter="url(#softShadow)"/>
+								<text id="win-2" class="win-chip-num" x="0" y="10" text-anchor="middle">89</text>
+							</g>
+						</g>
+					</g>
+
+					<!-- Your Numbers panel -->
+					<g id="yourNumbersGroup" transform="translate(35,210)">
+						<rect id="yourNumbersPanel" width="680" height="220" rx="16" fill="url(#panelGrad)" stroke="#ffe978" stroke-width="4"/>
+						<rect x="2" y="2" width="816" height="236" rx="14" fill="url(#diagonalStripes)" opacity="0.65"/>
+						<rect x="0" y="0" width="680" height="220" rx="16" fill="#fff" mask="url(#shineMask)" opacity="0.35"/>
+						<text x="340" y="30" text-anchor="middle" class="your-label">YOUR NUMBERS</text>
+
+						<!-- 2x6 grid -->
+						<g id="cellsGrid" transform="translate(20,50)">
+							<!-- We'll attach ids to each text element in reading order (left->right, top->bottom) for JS. -->
+							<!-- Row 1 -->
+							<g>
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-0" x="45" y="48" text-anchor="middle" class="cell-num">5</text>
+							</g>
+							<g transform="translate(110,0)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-1" x="45" y="48" text-anchor="middle" class="cell-num">37</text>
+							</g>
+							<g transform="translate(220,0)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-2" x="45" y="48" text-anchor="middle" class="cell-num">64</text>
+							</g>
+
+							<!-- Row 2 -->
+							<g transform="translate(0,80)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-3" x="45" y="48" text-anchor="middle" class="cell-num">21</text>
+							</g>
+							<g transform="translate(110,80)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-4" x="45" y="48" text-anchor="middle" class="cell-num">89</text>
+							</g>
+							<g transform="translate(220,80)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-5" x="45" y="48" text-anchor="middle" class="cell-num">52</text>
+							</g>
+
+							<!-- Row 1 continuation -->
+							<g transform="translate(330,0)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-6" x="45" y="48" text-anchor="middle" class="cell-num">11</text>
+							</g>
+							<g transform="translate(440,0)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-7" x="45" y="48" text-anchor="middle" class="cell-num">73</text>
+							</g>
+							<g transform="translate(550,0)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-8" x="45" y="48" text-anchor="middle" class="cell-num">2</text>
+							</g>
+
+							<!-- Row 2 continuation -->
+							<g transform="translate(330,80)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-9" x="45" y="48" text-anchor="middle" class="cell-num">46</text>
+							</g>
+							<g transform="translate(440,80)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-10" x="45" y="48" text-anchor="middle" class="cell-num">95</text>
+							</g>
+							<g transform="translate(550,80)">
+								<rect width="90" height="70" rx="10" class="nomatch"/>
+								<text id="cell-11" x="45" y="48" text-anchor="middle" class="cell-num">30</text>
+							</g>
+						</g>
+					</g>
+
+					<!-- Footer -->
+					<g>
+						<rect x="150" y="440" width="450" height="60" rx="10" fill="#0b2e15" opacity="0.65"/>
+						<text id="footerRules" x="450" y="458" text-anchor="middle" class="footer">
+							<tspan id="footerLine1" x="380" dy="0">Rules: Scratch</tspan>
+							<tspan id="footerLine2" x="380" dy="18">If any match, you’ve completed the CAPTCHA. If none match, try again.</tspan>
+							<tspan x="380" dy="18">This only verifies you’re human, not your gambling addiction.</tspan>
+						</text>
+					</g>
+				</svg>
+
+				<!-- Canvas will be created dynamically by JS and positioned absolutely over the yourNumbersPanel area -->
+				<canvas id="scratchCanvas" width="1" height="1" aria-label="Scratch surface for CAPTCHA" title="Scratch here"></canvas>
+			</div>
+
+			<div class="controls">
+				<button class="btn" id="resetBtn" title="Generate a new ticket" aria-label="New ticket">
+					<!-- ticket icon -->
+					<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#123" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2h-5l-1-2h-4l-1 2H5a2 2 0 00-2 2z"/></svg>
+					New Ticket
+				</button>
+				<button class="btn secondary" id="revealBtn" title="Reveal winning numbers" aria-label="Reveal winning numbers">
+					<!-- eye icon -->
+					<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7zm0 12a5 5 0 110-10 5 5 0 010 10z"/></svg>
+					Reveal
+				</button>
+				<div style="opacity:.95" aria-live="polite">Scratched: <span id="percent" class="percent-pill">0%</span></div>
+			</div>
+
+		</div>
+
+		<div id="msg" class="message"></div>
+
+		<script>
+		// Main JS for scratch-off CAPTCHA
+		(function(){
+			const WIN_COUNT = 3;
+			const CELL_COUNT = 12;
+			const CLEAR_THRESHOLD = 0.80; // 80% cleared (when evaluation runs)
+			const sampleInterval = 4000; // ms
+			// Messages you can customize
+			let WIN_MESSAGE = 'You win!';
+			let WIN_SUBTEXT = 'Great now I know you\'re a compulsive gambler.';
+			let LOSS_MESSAGE = 'Try again!';
+			let LOSS_SUBTEXT = 'No matches — close, try a new ticket!<br>Remember that every great player stops just before the next big win!';
+			// Autoscratch: when percent cleared reaches this value, the script will auto-reveal
+			// Set between 0 and 1 (e.g., 0.80 = 80%)
+			let AUTO_SCRATCH_THRESHOLD = 0.80;
+			// How many of the WIN_COUNT winning numbers must be present (on the ticket / revealed)
+			// to count as a win. Set to 1 to require any single match, 2 to require two matching
+			// winning numbers, etc. Valid range: 1..WIN_COUNT
+			let MATCHES_TO_WIN = 3;
+			// Configurable variables you can tweak
+			// Brush radius in CSS pixels (affects how large each scratch stroke is)
+			let BRUSH_RADIUS = 8;
+			// Step in pixels for sampling along lines (smaller = denser strokes, more CPU)
+			let BRUSH_STEP = 6;
+			// Downscale sampling size used to compute cleared percentage (in pixels)
+			const SAMPLE_DOWNSCALE_SIZE = 80; // set to ~80 for a good balance of speed/accuracy
+
+			const svg = document.getElementById('ticketSvg');
+			const canvas = document.getElementById('scratchCanvas');
+			const container = document.getElementById('ticketContainer');
+			const percentEl = document.getElementById('percent');
+			const msgEl = document.getElementById('msg');
+			const resetBtn = document.getElementById('resetBtn');
+			const revealBtn = document.getElementById('revealBtn');
+
+			let wins = [];
+			let cells = [];
+			let cellCenters = []; // positions for sampling
+			let dpr = window.devicePixelRatio || 1;
+			let ctx = canvas.getContext('2d');
+			let isDown = false;
+			let last = null;
+			let checkTimer = null;
+			let percentCleared = 0;
+			let solved = false;
+
+			function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min }
+
+			function genNumbers(){
+				// Generate winning numbers and ticket cells separately.
+				// Previously we created a single unique set for wins+cells which ensured
+				// there could never be a match. Now wins are unique, and cells are
+				// unique among themselves but may include winning numbers so matches are possible.
+				// Wins: unique
+				const winSet = new Set();
+				while(winSet.size < WIN_COUNT){ winSet.add(randInt(1,99)); }
+				wins = Array.from(winSet);
+
+				// Cells: unique among cells, but allow overlap with wins
+				cells = [];
+				const cellSet = new Set();
+				while(cells.length < CELL_COUNT){
+					const n = randInt(1,99);
+					if(cellSet.has(n)) continue; // keep cells unique for clarity
+					cellSet.add(n);
+					cells.push(n);
+				}
+			}
+
+			function populateSvg(){
+				// put winning numbers
+				for(let i=0;i<WIN_COUNT;i++){
+					const el = document.getElementById('win-'+i);
+					if(el) el.textContent = wins[i].toString();
+				}
+				// put cells
+				for(let i=0;i<CELL_COUNT;i++){
+					const el = document.getElementById('cell-'+i);
+					if(el) el.textContent = cells[i].toString();
+					// If this cell's number matches one of the winning numbers, mark it in the SVG now
+					try{
+						const num = parseInt(el.textContent,10);
+						const rect = el.previousElementSibling;
+						if(wins.includes(num)){
+							if(rect) rect.setAttribute('class','match');
+						} else {
+							if(rect) rect.setAttribute('class','nomatch');
+						}
+					}catch(e){ /* ignore if element structure unexpected */ }
+				}
+
+				// Update footer rules text based on MATCHES_TO_WIN
+				updateFooterRules();
+			}
+
+			function getPanelRect(){
+				const panel = document.getElementById('yourNumbersPanel');
+				// Use getBoundingClientRect on the panel (which is inside the SVG). We'll position canvas using container offset.
+				const svgRect = svg.getBoundingClientRect();
+				const panelRect = panel.getBoundingClientRect();
+				// compute panel rect relative to container (ticketContainer)
+				const containerRect = container.getBoundingClientRect();
+				return {
+					left: panelRect.left - containerRect.left,
+					top: panelRect.top - containerRect.top,
+					width: panelRect.width,
+					height: panelRect.height,
+					absLeft: panelRect.left,
+					absTop: panelRect.top
+				};
+			}
+
+			function computeCellCenters(){
+				// For each text cell element, get its center in page coords and map to canvas coords later
+				cellCenters = [];
+				for(let i=0;i<CELL_COUNT;i++){
+					const t = document.getElementById('cell-'+i);
+					if(!t) continue;
+					const r = t.getBoundingClientRect();
+					const cx = r.left + r.width/2;
+					const cy = r.top + r.height/2;
+					cellCenters.push({cx,cy});
+				}
+			}
+
+			function resizeCanvas(){
+				const rect = getPanelRect();
+				dpr = window.devicePixelRatio || 1;
+				canvas.style.left = rect.left + 'px';
+				canvas.style.top = rect.top + 'px';
+				canvas.style.width = rect.width + 'px';
+				canvas.style.height = rect.height + 'px';
+
+				canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+				canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+				ctx = canvas.getContext('2d');
+				ctx.scale(dpr, dpr);
+				drawOverlay();
+				computeCellCenters();
+			}
+
+			function drawOverlay(){
+				// realistic silver foil: base gradient + stripes + noise
+				const w = canvas.width / dpr;
+				const h = canvas.height / dpr;
+				// base
+				const g = ctx.createLinearGradient(0,0,w, h);
+				g.addColorStop(0, '#bfc7cb');
+				g.addColorStop(0.3, '#f7f9fb');
+				g.addColorStop(0.6, '#d1d7db');
+				g.addColorStop(1, '#aeb7be');
+				ctx.clearRect(0,0,w,h);
+				ctx.fillStyle = g;
+				roundRect(ctx, 0, 0, w, h, 12);
+				ctx.fill();
+
+				// subtle stripes
+				ctx.fillStyle = 'rgba(255,255,255,0.05)';
+				for(let x=-40;x<w+80;x+=16){
+					ctx.save();
+					ctx.translate(x,0);
+					ctx.rotate(-0.2);
+					ctx.fillRect(0, -40, 8, h+80);
+					ctx.restore();
+				}
+
+				// light sheen streaks
+				ctx.globalCompositeOperation = 'overlay';
+				const s = ctx.createLinearGradient(-w,0,w*1.4,0);
+				s.addColorStop(0, 'rgba(255,255,255,0)');
+				s.addColorStop(0.45, 'rgba(255,255,255,0.18)');
+				s.addColorStop(0.5, 'rgba(255,255,255,0.28)');
+				s.addColorStop(0.56, 'rgba(255,255,255,0.12)');
+				s.addColorStop(1, 'rgba(255,255,255,0)');
+				ctx.fillStyle = s;
+				ctx.fillRect(0,0,w,h);
+				ctx.globalCompositeOperation = 'source-over';
+
+				// noise: light specks
+				for(let i=0;i<240;i++){
+					ctx.fillStyle = 'rgba(0,0,0,'+ (Math.random()*0.06) +')';
+					const rx = Math.random()*w;
+					const ry = Math.random()*h;
+					ctx.fillRect(rx,ry,1,1);
+				}
+			}
+
+			function roundRect(ctx,x,y,w,h,r){
+				ctx.beginPath();
+				ctx.moveTo(x+r,y);
+				ctx.arcTo(x+w,y,x+w,y+h,r);
+				ctx.arcTo(x+w,y+h,x,y+h,r);
+				ctx.arcTo(x,y+h,x,y,r);
+				ctx.arcTo(x,y,x+w,y,r);
+				ctx.closePath();
+			}
+
+			function pointerDown(e){
+				if(solved) return;
+				isDown = true;
+				last = getPos(e);
+				scratchPoint(last.x, last.y);
+				canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+			}
+			function pointerMove(e){
+				if(!isDown) return;
+				const p = getPos(e);
+				scratchLine(last.x, last.y, p.x, p.y);
+				last = p;
+			}
+			function pointerUp(e){
+				isDown = false;
+				last = null;
+				canvas.releasePointerCapture && canvas.releasePointerCapture(e.pointerId);
+			}
+
+			function getPos(e){
+				const rect = canvas.getBoundingClientRect();
+				const x = (e.clientX - rect.left);
+				const y = (e.clientY - rect.top);
+				return {x,y};
+			}
+
+			function scratchPoint(x,y){
+				// radial erase with soft edge using configurable brush size
+				const rad = BRUSH_RADIUS; // visible brush radius in CSS pixels
+				const grd = ctx.createRadialGradient(x,y,1,x,y,rad);
+				grd.addColorStop(0, 'rgba(0,0,0,0.9)');
+				grd.addColorStop(0.6, 'rgba(0,0,0,0.6)');
+				grd.addColorStop(1, 'rgba(0,0,0,0)');
+				ctx.globalCompositeOperation = 'destination-out';
+				ctx.fillStyle = grd;
+				ctx.beginPath();
+				ctx.arc(x,y,rad,0,Math.PI*2);
+				ctx.fill();
+				ctx.globalCompositeOperation = 'source-over';
+			}
+
+			function scratchLine(x1,y1,x2,y2){
+				const dx = x2-x1, dy = y2-y1;
+				const dist = Math.hypot(dx,dy);
+				const step = BRUSH_STEP;
+				for(let i=0;i<dist;i+=step){
+					const t = i/dist;
+					const x = x1 + dx*t + (Math.random()-0.5)*Math.min(4, BRUSH_RADIUS*0.15);
+					const y = y1 + dy*t + (Math.random()-0.5)*Math.min(4, BRUSH_RADIUS*0.15);
+					scratchPoint(x,y);
+				}
+			}
+
+			function sampleClearedPercent(){
+				// Use a small offscreen canvas and draw the overlay into it (downscaling)
+				try{
+					const srcW = canvas.width; // backing pixel size
+					const srcH = canvas.height;
+					// choose downscale dimensions while preserving aspect
+					const maxSize = SAMPLE_DOWNSCALE_SIZE;
+					const ratio = srcW / srcH || 1;
+					let smallW = Math.min(maxSize, Math.max(8, Math.round(maxSize * Math.min(1, ratio))));
+					let smallH = Math.min(maxSize, Math.max(8, Math.round(smallW / (ratio || 1))));
+
+					const off = document.createElement('canvas');
+					off.width = smallW;
+					off.height = smallH;
+					const octx = off.getContext('2d');
+					// draw the main canvas into the small canvas (this downscales and preserves alpha)
+					octx.drawImage(canvas, 0, 0, srcW, srcH, 0, 0, smallW, smallH);
+					const data = octx.getImageData(0,0, smallW, smallH).data;
+					let total = smallW * smallH;
+					let cleared = 0;
+					for(let i=0;i<data.length;i+=4){
+						const alpha = data[i+3];
+						if(alpha < 64) cleared++; // treat mostly-transparent as cleared
+					}
+					percentCleared = cleared / total;
+					percentEl.textContent = Math.round(percentCleared*100) + '%';
+					return percentCleared;
+				}catch(err){
+					console.warn('Sampling failed',err);
+					return 0;
+				}
+			}
+
+			function sampleCellRevealed(cx,cy){
+				// Map page coordinates (cx,cy) to canvas backing pixel coordinates and sample alpha
+				const rect = canvas.getBoundingClientRect();
+				// compute scale from CSS px to backing pixel
+				const scaleX = canvas.width / rect.width;
+				const scaleY = canvas.height / rect.height;
+				const px = Math.round((cx - rect.left) * scaleX);
+				const py = Math.round((cy - rect.top) * scaleY);
+				if(px<0||py<0||px>=canvas.width||py>=canvas.height) return false;
+				try{
+					const p = ctx.getImageData(px, py, 1,1).data;
+					return p[3] < 80; // cleared if alpha is low
+				}catch(e){
+					return false;
+				}
+			}
+
+			function evaluateTicket(){
+				// Determine which cells are revealed and whether any match
+				const revealedIndices = [];
+				for(let i=0;i<cellCenters.length;i++){
+					const {cx,cy} = cellCenters[i];
+					if(sampleCellRevealed(cx,cy)) revealedIndices.push(i);
+				}
+				const revealedNums = revealedIndices.map(i=>cells[i]);
+				// Count how many unique winning numbers are present among the revealed numbers
+				const revealedSet = new Set(revealedNums);
+				const matchesCount = wins.filter(w=> revealedSet.has(w)).length;
+				const isWin = matchesCount >= Math.max(1, Math.min(MATCHES_TO_WIN, WIN_COUNT));
+				solved = true;
+				if(isWin) showMessage(WIN_MESSAGE, true);
+					else showMessage(LOSS_MESSAGE, false);
+				// highlight only winning revealed cells visually in the SVG
+				markMatches(revealedIndices);
+			}
+
+			function markMatches(revealedIndices){
+				// Reset all cells to nomatch base state
+				for(let i=0;i<CELL_COUNT;i++){
+					const el = document.getElementById('cell-'+i);
+					if(!el) continue;
+					const rect = el.previousElementSibling;
+					if(rect){ rect.setAttribute('class','nomatch'); rect.setAttribute('stroke','#c6d9c9'); }
+				}
+				// Only the revealed cells that match a winning number get the 'match' highlight
+				for(let idx of revealedIndices){
+					const el = document.getElementById('cell-'+idx);
+					if(!el) continue;
+					const num = parseInt(el.textContent,10);
+					const rect = el.previousElementSibling;
+					if(wins.includes(num)){
+						if(rect) rect.setAttribute('class','match');
+					} else {
+						// keep as nomatch (no green highlight)
+						if(rect) rect.setAttribute('class','nomatch');
+					}
+				}
+			}
+
+			function showMessage(text, ok){
+				msgEl.className = 'message show ' + (ok? 'win':'lose');
+				const sub = ok ? WIN_SUBTEXT : LOSS_SUBTEXT;
+				msgEl.innerHTML = '<strong style="font-size:18px">'+ text +'</strong><div style="margin-top:8px;opacity:.9;font-size:13px">'+ sub +'</div>';
+				setTimeout(()=>{ msgEl.classList.remove('show') }, 4200);
+			}
+
+			function updateFooterRules(){
+				try{
+					const line2 = document.getElementById('footerLine2');
+					if(!line2) return;
+					const k = Math.max(1, Math.min(MATCHES_TO_WIN, WIN_COUNT));
+					let text = '';
+					if(k === 1){
+						text = 'If any match, you\u2019ve completed the CAPTCHA. If none match, try again.';
+					} else if(k >= WIN_COUNT){
+						text = `You must reveal all ${WIN_COUNT} winning numbers to win.`;
+					} else {
+						text = `Reveal at least ${k} of the ${WIN_COUNT} winning numbers to win.`;
+					}
+					line2.textContent = text;
+				}catch(e){ console.warn('Footer update failed', e); }
+			}
+
+			function reset(){
+				solved = false;
+				percentCleared = 0;
+				percentEl.textContent = '0%';
+				// restore cell visuals
+				for(let i=0;i<CELL_COUNT;i++){
+					const rect = document.getElementById('cell-'+i).previousElementSibling;
+					if(rect){ rect.setAttribute('class','nomatch'); rect.setAttribute('stroke','#c6d9c9'); }
+				}
+				genNumbers();
+				populateSvg();
+				resizeCanvas();
+				drawOverlay();
+				// start sampling timer
+				if(checkTimer) clearInterval(checkTimer);
+				checkTimer = setInterval(()=>{
+					const p = sampleClearedPercent();
+					if(!solved && p >= AUTO_SCRATCH_THRESHOLD){
+						setTimeout(()=>{ revealWins(); }, 120);
+						clearInterval(checkTimer);
+					} else if(!solved && p >= CLEAR_THRESHOLD){
+						// small delay to allow final strokes to render
+						setTimeout(()=> evaluateTicket(), 120);
+						clearInterval(checkTimer);
+					}
+				}, sampleInterval);
+			}
+
+			function revealWins(){
+				// temporarily clear overlay to show everything
+				ctx.clearRect(0,0,canvas.width, canvas.height);
+				percentEl.textContent = '100%';
+				// show only winning cells highlighted
+				for(let i=0;i<CELL_COUNT;i++){
+					const el = document.getElementById('cell-'+i);
+					const num = parseInt(el.textContent,10);
+					const rect = el.previousElementSibling;
+					if(rect){ rect.setAttribute('class', wins.includes(num) ? 'match' : 'nomatch'); }
+				}
+				// Show message: determine how many winning numbers are present on the ticket
+				const ticketMatches = wins.filter(w=> cells.includes(w)).length;
+				const isWin = ticketMatches >= Math.max(1, Math.min(MATCHES_TO_WIN, WIN_COUNT));
+				showMessage(isWin ? WIN_MESSAGE : LOSS_MESSAGE, isWin);
+				solved = true;
+			}
+
+			// event wiring
+			canvas.addEventListener('pointerdown', pointerDown);
+			canvas.addEventListener('pointermove', pointerMove);
+			window.addEventListener('pointerup', pointerUp);
+			resetBtn.addEventListener('click', ()=>{ reset(); });
+			revealBtn.addEventListener('click', ()=>{ revealWins(); });
+
+			// on resize recalc positions and re-draw overlay
+			let rTimer = null;
+			window.addEventListener('resize', ()=>{ clearTimeout(rTimer); rTimer = setTimeout(()=> resizeCanvas(),120); });
+
+			// init
+			genNumbers();
+			populateSvg();
+
+			// small timeout to ensure SVG layout is computed
+			window.addEventListener('load', ()=>{
+				resizeCanvas();
+				drawOverlay();
+				computeCellCenters();
+				// start sampling periodically
+				checkTimer = setInterval(()=>{
+					const p = sampleClearedPercent();
+					if(!solved && p >= AUTO_SCRATCH_THRESHOLD){
+						// auto-reveal when autoscratch threshold reached
+						setTimeout(()=>{ revealWins(); }, 150);
+						clearInterval(checkTimer);
+					} else if(!solved && p >= CLEAR_THRESHOLD){
+						setTimeout(()=> evaluateTicket(), 150);
+						clearInterval(checkTimer);
+					}
+				}, sampleInterval);
+			});
+
+		})();
+		</script>
+	</body>
+</html>
