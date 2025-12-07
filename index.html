@@ -276,9 +276,10 @@
 			const CELL_COUNT = 12;
 			const CLEAR_THRESHOLD = 0.80; // 80% cleared (when evaluation runs)
 			const sampleInterval = 4000; // ms
+			const ALERT_DURATION = 10000; // ms duration for win/loss alert
 			// Messages you can customize
 			let WIN_MESSAGE = 'You win!';
-			let WIN_SUBTEXT = 'Great now I know you\'re a compulsive gambler.';
+			let WIN_SUBTEXT = 'Great now I know you\'re not a Robot!';
 			let LOSS_MESSAGE = 'Try again!';
 			let LOSS_SUBTEXT = 'No matches — close, try a new ticket!<br>Remember that every great player stops just before the next big win!';
 			// Autoscratch: when percent cleared reaches this value, the script will auto-reveal
@@ -582,8 +583,12 @@
 				const matchesCount = wins.filter(w=> revealedSet.has(w)).length;
 				const isWin = matchesCount >= Math.max(1, Math.min(MATCHES_TO_WIN, WIN_COUNT));
 				solved = true;
+				let sub = null;
+				if(!isWin && MATCHES_TO_WIN > 1 && matchesCount >= 1){
+					sub = `You were extremely close, you only found ${matchesCount} numbers out of the total, try again, maybe the next ticket will be luckier!<br>Remember that every great player stops just before the next big win!`;
+				}
 				if(isWin) showMessage(WIN_MESSAGE, true);
-					else showMessage(LOSS_MESSAGE, false);
+					else showMessage(LOSS_MESSAGE, false, sub);
 				// highlight only winning revealed cells visually in the SVG
 				markMatches(revealedIndices);
 			}
@@ -611,11 +616,11 @@
 				}
 			}
 
-			function showMessage(text, ok){
+			function showMessage(text, ok, customSub){
 				msgEl.className = 'message show ' + (ok? 'win':'lose');
-				const sub = ok ? WIN_SUBTEXT : LOSS_SUBTEXT;
+				const sub = customSub || (ok ? WIN_SUBTEXT : LOSS_SUBTEXT);
 				msgEl.innerHTML = '<strong style="font-size:18px">'+ text +'</strong><div style="margin-top:8px;opacity:.9;font-size:13px">'+ sub +'</div>';
-				setTimeout(()=>{ msgEl.classList.remove('show') }, 4200);
+				setTimeout(()=>{ msgEl.classList.remove('show') }, ALERT_DURATION);
 			}
 
 			function updateFooterRules(){
@@ -636,6 +641,7 @@
 			}
 
 			function reset(){
+				msgEl.classList.remove('show');
 				solved = false;
 				percentCleared = 0;
 				percentEl.textContent = '0%';
@@ -677,7 +683,11 @@
 				// Show message: determine how many winning numbers are present on the ticket
 				const ticketMatches = wins.filter(w=> cells.includes(w)).length;
 				const isWin = ticketMatches >= Math.max(1, Math.min(MATCHES_TO_WIN, WIN_COUNT));
-				showMessage(isWin ? WIN_MESSAGE : LOSS_MESSAGE, isWin);
+				let sub = null;
+				if(!isWin && MATCHES_TO_WIN > 1 && ticketMatches >= 1){
+					sub = `You were extremely close, you only found ${ticketMatches} numbers out of the total, try again, maybe the next ticket will be luckier!<br>Remember that every great player stops just before the next big win!`;
+				}
+				showMessage(isWin ? WIN_MESSAGE : LOSS_MESSAGE, isWin, sub);
 				solved = true;
 			}
 
