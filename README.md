@@ -1,6 +1,8 @@
 # Scratch & Verify: The Gambling CAPTCHA
 
-![Project Status](https://img.shields.io/badge/Status-PoC-orange) ![License](https://img.shields.io/badge/License-CC_BY_4.0-blue) ![Addiction-Level](https://img.shields.io/badge/Dopamine-High-red)
+[![Live demo](https://img.shields.io/badge/demo-live-brightgreen?style=for-the-badge)](https://T0ls.github.io/Gambling-CAPTCHA/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-0a66ff?style=for-the-badge)](https://creativecommons.org/licenses/by/4.0/)
+[![Made with HTML5 & CSS3](https://img.shields.io/badge/made%20with-HTML5%20%26%20CSS3-e34f26?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/HTML5)
 
 **Scratch & Verify** is a lightweight, zero-dependency JavaScript CAPTCHA that replaces the frustration of identifying traffic lights with the thrill of a scratch-off lottery ticket. It secures your website by exploiting the one vulnerability bots don't have: **a gambling addiction**.
 
