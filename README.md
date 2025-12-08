@@ -6,7 +6,7 @@
 
 **Scratch & Verify** is a lightweight, zero-dependency JavaScript CAPTCHA that replaces the frustration of identifying traffic lights with the thrill of a scratch-off lottery ticket. It secures your website by exploiting the one vulnerability bots don't have: **a gambling addiction**.
 
-## 📖 The Philosophy: The "Scratch & Verify" Protocol
+## The Philosophy: The "Scratch & Verify" Protocol
 
 *Why Gambling is the Ultimate Turing Test*
 
@@ -33,7 +33,7 @@ The system essentially certifies the user as a "Certified Human" the exact momen
 
 ---
 
-## 🚀 Features
+## Features
 
 * **Realistic Scratch Effect:** HTML5 Canvas-based scratch surface with "silver foil" gradients and particle debris.
 * **SVG Ticket Generation:** Crisp, scalable vector graphics for the ticket background and text.
@@ -42,7 +42,7 @@ The system essentially certifies the user as a "Certified Human" the exact momen
 * **Responsive Design:** Works on desktop (mouse) and mobile (touch).
 * **Zero Dependencies:** Pure Vanilla JS and CSS.
 
-## 📦 Installation & Usage
+## Installation & Usage
 
 1.  **Clone the repository:**
     ```bash
@@ -57,7 +57,7 @@ The system essentially certifies the user as a "Certified Human" the exact momen
     npx serve .
     ```
 
-## ⚙️ Configuration
+## Configuration
 
 You can tweak the game mechanics by modifying the constants at the top of the `<script>` section in `index.html`:
 
